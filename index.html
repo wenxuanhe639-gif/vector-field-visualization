@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>向量场实验台 · 散度与旋度探索器</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.2/math.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --ink:#0d1420;
+    --panel:#131c2b;
+    --panel-2:#0f1726;
+    --line:#23314a;
+    --text:#dfe7f3;
+    --muted:#8294b0;
+    --source:#ff9a3c;
+    --sink:#3cc9ff;
+    --curl:#c77bff;
+    --accent:#ffd166;
+    --mono:'JetBrains Mono','SFMono-Regular',Consolas,'Courier New',monospace;
+    --sans:'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+    /* MathLive 虚拟键盘暗色主题 */
+    --keyboard-zindex:3000;
+    --keyboard-background:#0f1726ee;
+    --keyboard-border:var(--line);
+    --keycap-background:#1d2a40;
+    --keycap-background-hover:#27395a;
+    --keycap-background-active:#2f4570;
+    --keycap-border:#2a3a58;
+    --keycap-border-bottom:#1a2436;
+    --keycap-text:#dfe7f3;
+    --keycap-secondary-background:#131c2b;
+    --keycap-secondary-background-hover:#1d2a40;
+    --keycap-secondary-text:#8294b0;
+    --keycap-secondary-border:#23314a;
+    --keycap-secondary-border-bottom:#16202f;
+    --keyboard-toolbar-text:#8294b0;
+    --keyboard-toolbar-text-active:#ffd166;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--ink);color:var(--text);font-family:var(--sans);
+    display:flex;flex-direction:column;overflow:hidden;font-size:14px;
+    overscroll-behavior:none;
+    -webkit-user-select:none;user-select:none;
+    touch-action:manipulation;
+  }
+  input,select,math-field{ -webkit-user-select:auto;user-select:auto; }
+  header{
+    display:flex;align-items:center;gap:14px;padding:10px 16px;
+    background:var(--panel-2);border-bottom:1px solid var(--line);flex-wrap:wrap;
+  }
+  .brand{display:flex;flex-direction:column;line-height:1.15;margin-right:8px}
+  .brand b{font-size:15px;letter-spacing:.04em}
+  .brand span{font-size:11px;color:var(--muted);font-family:var(--mono)}
+  .mode-toggle{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .mode-toggle button{
+    background:transparent;color:var(--muted);border:none;padding:8px 18px;cursor:pointer;
+    font-family:var(--mono);font-size:13px;letter-spacing:.08em;transition:background .15s,color .15s;
+  }
+  .mode-toggle button.active{background:#1d2a40;color:var(--accent)}
+  .mode-toggle button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  select,input[type=text],input[type=number]{
+    background:#0b121f;color:var(--text);border:1px solid var(--line);border-radius:6px;
+    padding:8px 8px;font-family:var(--mono);font-size:13px;
+  }
+  select:focus,input:focus{outline:1px solid var(--accent);border-color:var(--accent)}
+  label.small{font-size:12px;color:var(--muted)}
+  /* ---------- LaTeX 排版输入框 ---------- */
+  math-field{
+    flex:1;min-width:0;display:block;
+    background:#0b121f;border:1px solid var(--line);border-radius:6px;
+    padding:5px 8px;font-size:17px;color:var(--text);
+    --caret-color:var(--accent);
+    --selection-background-color:#2f4570;
+    --selection-color:#fff;
+    --contains-highlight-background-color:#1d2a40;
+    --placeholder-color:#4a5b78;
+    --highlight-text:#fff;
+  }
+  math-field:focus-within{outline:1px solid var(--accent);border-color:var(--accent)}
+  math-field::part(virtual-keyboard-toggle){color:var(--muted)}
+  math-field::part(virtual-keyboard-toggle):hover{color:var(--accent)}
+  math-field::part(menu-toggle){display:none}
+  math-field:not(:defined){
+    font-family:var(--mono);min-height:34px;line-height:24px;color:var(--muted);
+  }
+  #layout{flex:1;display:flex;min-height:0}
+  aside{
+    width:332px;min-width:332px;background:var(--panel);border-right:1px solid var(--line);
+    overflow-y:auto;padding:14px 14px 28px;-webkit-overflow-scrolling:touch;
+  }
+  #panel-grip{display:none}
+  aside h3{
+    font-size:11px;letter-spacing:.18em;color:var(--muted);font-weight:600;
+    margin:18px 0 8px;text-transform:uppercase;font-family:var(--mono);
+    border-bottom:1px solid var(--line);padding-bottom:5px;
+  }
+  aside h3:first-of-type{margin-top:2px}
+  .field-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .field-row .comp{
+    font-family:var(--mono);color:var(--accent);width:70px;font-size:13px;flex-shrink:0;
+  }
+  .btn{
+    background:#1d2a40;color:var(--text);border:1px solid var(--line);border-radius:7px;
+    padding:10px 14px;cursor:pointer;font-size:13px;font-family:var(--sans);
+    transition:background .15s;width:100%;
+  }
+  .btn:hover{background:#27395a}
+  .btn:focus-visible{outline:2px solid var(--accent)}
+  .btn.primary{border-color:#3a4d6e;background:#22324e;font-weight:600}
+  .apply-row{display:flex;gap:8px}
+  .apply-row .btn.kb{width:auto;flex-shrink:0;font-size:16px;padding:8px 14px}
+  .err{color:#ff6b6b;font-size:12px;font-family:var(--mono);min-height:16px;margin-top:6px;word-break:break-all}
+  .tip{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.5}
+  .ctrl{margin-bottom:12px}
+  .ctrl .lab{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:3px}
+  .ctrl .lab output{font-family:var(--mono);color:var(--text)}
+  input[type=range]{width:100%;accent-color:var(--accent);touch-action:pan-x}
+  .radio-line{display:flex;gap:14px;font-size:13px;margin-bottom:8px;flex-wrap:wrap}
+  .radio-line label{display:flex;gap:5px;align-items:center;cursor:pointer;padding:4px 0}
+  #probe-card{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:6px;
+  }
+  #probe-pos{font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:8px}
+  .readout{display:flex;align-items:baseline;justify-content:space-between;margin:6px 0;gap:8px;flex-wrap:wrap}
+  .readout .name{font-size:12px;color:var(--muted)}
+  .readout .val{font-family:var(--mono);font-size:15px;word-break:break-all}
+  .val.div-pos{color:var(--source)}
+  .val.div-neg{color:var(--sink)}
+  .val.curl-c{color:var(--curl)}
+  .interp{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5;border-top:1px dashed var(--line);padding-top:8px}
+  .interp b{color:var(--text)}
+  .formula{
+    font-family:var(--mono);font-size:11.5px;color:#9fb3d1;background:#0b121f;
+    border:1px solid var(--line);border-radius:6px;padding:7px 8px;margin-top:6px;
+    line-height:1.6;word-break:break-all;
+  }
+  .probe-xyz{display:flex;gap:6px;margin-top:6px}
+  .probe-xyz input{width:100%;min-width:0}
+  #viewport{flex:1;position:relative;min-width:0;min-height:0}
+  #canvas2d,#container3d{position:absolute;inset:0;width:100%;height:100%}
+  #canvas2d{cursor:crosshair;touch-action:none}
+  #container3d{display:none;touch-action:none}
+  #container3d canvas{touch-action:none}
+  #legend{
+    position:absolute;right:14px;bottom:14px;background:rgba(13,20,32,.82);
+    border:1px solid var(--line);border-radius:8px;padding:8px 10px;backdrop-filter:blur(4px);
+    font-family:var(--mono);font-size:11px;color:var(--muted);pointer-events:none;
+  }
+  #legend .bar{width:160px;height:10px;border-radius:5px;margin:5px 0 3px;
+    background:linear-gradient(90deg,var(--sink),#5f6e85 50%,var(--source))}
+  #legend .ends{display:flex;justify-content:space-between}
+  #hint{
+    position:absolute;left:14px;top:12px;font-size:12px;color:var(--muted);
+    background:rgba(13,20,32,.72);padding:5px 10px;border-radius:6px;border:1px solid var(--line);
+    pointer-events:none;font-family:var(--mono);max-width:calc(100% - 28px);
+  }
+  @media (pointer:coarse){
+    input[type=range]{height:34px}
+    input[type=range]::-webkit-slider-thumb{width:26px;height:26px}
+    .btn{padding:12px 14px;font-size:14px}
+    select,input[type=text],input[type=number]{padding:10px 10px;font-size:14px}
+    .mode-toggle button{padding:11px 20px;font-size:14px}
+    .radio-line label{padding:7px 0}
+  }
+  @media (max-width:760px){
+    header{padding:8px 10px;gap:8px}
+    #layout{flex-direction:column}
+    #viewport{order:1}
+    aside{
+      order:2;width:100%;min-width:0;border-right:none;border-top:1px solid var(--line);
+      max-height:46dvh;transition:max-height .25s ease;padding-top:0;
+    }
+    body.panel-collapsed aside{max-height:46px;overflow:hidden}
+    #panel-grip{
+      display:flex;align-items:center;justify-content:center;gap:8px;
+      position:sticky;top:0;z-index:5;background:var(--panel);
+      height:46px;margin:0 -14px 6px;cursor:pointer;border-bottom:1px solid var(--line);
+      font-size:13px;color:var(--muted);
+    }
+    #panel-grip::before{content:'';width:38px;height:4px;border-radius:2px;background:#3a4d6e}
+    #legend{right:10px;bottom:10px;transform:scale(.92);transform-origin:bottom right}
+    #hint{font-size:11px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <b>向量场实验台</b>
+    <span>div · curl explorer</span>
+  </div>
+  <div class="mode-toggle" role="tablist" aria-label="维度切换">
+    <button id="btn2d" class="active" role="tab">2D 平面</button>
+    <button id="btn3d" role="tab">3D 空间</button>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <label class="small" for="preset">预设场</label>
+    <select id="preset"></select>
+  </div>
+</header>
+
+<div id="layout">
+  <aside id="sidebar">
+    <div id="panel-grip" role="button" aria-label="展开或收起控制面板"><span id="grip-label">收起面板</span></div>
+
+    <h3>场的定义</h3>
+    <div class="radio-line">
+      <label><input type="radio" name="inputType" value="vec" checked>向量场 F</label>
+      <label><input type="radio" name="inputType" value="scalar">标量函数 f（取梯度场）</label>
+    </div>
+    <div class="field-row" id="rowP"><span class="comp" id="labP">P(x,y) =</span><math-field id="exprP">-y</math-field></div>
+    <div class="field-row" id="rowQ"><span class="comp" id="labQ">Q(x,y) =</span><math-field id="exprQ">x</math-field></div>
+    <div class="field-row" id="rowR" style="display:none"><span class="comp">R(x,y,z) =</span><math-field id="exprR">0</math-field></div>
+    <div class="field-row" id="rowF" style="display:none"><span class="comp" id="labF">f(x,y) =</span><math-field id="exprF">x^2+y^2</math-field></div>
+    <div class="apply-row">
+      <button class="btn primary" id="apply">应用 / 重绘</button>
+      <button class="btn kb" id="kbToggle" title="打开数学键盘" aria-label="打开数学键盘">⌨</button>
+    </div>
+    <div class="tip">点击输入框（手机）或右侧 ⌨ 按钮可呼出数学符号键盘：分数、根号、上标、π、希腊字母层等，输入即排版。</div>
+    <div class="err" id="errBox"></div>
+    <div class="formula" id="symDiv"></div>
+    <div class="formula" id="symCurl"></div>
+    <div class="ctrl" style="margin-top:10px">
+      <div class="lab"><span>输入历史（应用后自动记录）</span></div>
+      <select id="history" style="width:100%"><option value="-1">— 暂无历史 —</option></select>
+    </div>
+
+    <h3>可视化</h3>
+    <div class="radio-line" id="colorByLine">
+      <label><input type="radio" name="colorBy" value="div" checked>按散度着色</label>
+      <label><input type="radio" name="colorBy" value="curl">按旋度着色</label>
+    </div>
+    <div class="ctrl">
+      <div class="lab"><span>采样密度</span><output id="oDensity">16</output></div>
+      <input type="range" id="density" min="6" max="30" value="16">
+    </div>
+    <div class="ctrl">
+      <div class="lab"><span>坐标范围 ±</span><output id="oRange">4</output></div>
+      <input type="range" id="range" min="1" max="12" value="4" step="0.5">
+    </div>
+    <div class="ctrl">
+      <div class="lab"><span>箭头比例</span><output id="oScale">1.0</output></div>
+      <input type="range" id="scale" min="0.2" max="2.5" value="1" step="0.1">
+    </div>
+
+    <h3>探针 · 点分析</h3>
+    <div class="small" id="probeHint" style="font-size:12px;color:var(--muted)">轻点画布任意位置放置探针；单指拖动平移，双指捏合缩放，双击复位视图。</div>
+    <div class="probe-xyz" id="probeInputs">
+      <input type="number" id="px" step="0.1" value="1" aria-label="探针 x">
+      <input type="number" id="py" step="0.1" value="1" aria-label="探针 y">
+      <input type="number" id="pz" step="0.1" value="1" aria-label="探针 z" style="display:none">
+    </div>
+    <div id="probe-card">
+      <div id="probe-pos">P = (1, 1)</div>
+      <div class="readout" id="rowFval" style="display:none"><span class="name">f(P)　函数值</span><span class="val" id="vFs">—</span></div>
+      <div class="readout"><span class="name" id="nameFvec">F(P)　场值</span><span class="val" id="vF">—</span></div>
+      <div class="readout"><span class="name" id="nameDiv">∇·F　散度</span><span class="val" id="vDiv">—</span></div>
+      <div class="readout"><span class="name" id="nameCurl">∇×F　旋度</span><span class="val curl-c" id="vCurl">—</span></div>
+      <div class="interp" id="vInterp">—</div>
+    </div>
+  </aside>
+
+  <div id="viewport">
+    <canvas id="canvas2d"></canvas>
+    <div id="container3d"></div>
+    <div id="hint">轻点 = 探针 · 单指拖 = 平移 · 双指捏合 = 缩放 · 双击复位</div>
+    <div id="legend">
+      <div id="legendTitle">散度 ∇·F</div>
+      <div class="bar"></div>
+      <div class="ends"><span id="legMin">−</span><span>0</span><span id="legMax">+</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ---------- 全局错误兜底：任何脚本错误都显示出来，绝不无声卡死 ---------- */
+window.addEventListener('error', ev => {
+  const eb = document.getElementById('errBox');
+  if (eb) eb.textContent = '脚本错误：' + (ev.message || '未知错误');
+});
+
+/* =====================================================================
+   状态
+===================================================================== */
+const state = {
+  mode: '2d',                 // '2d' | '3d'
+  inputType: 'vec',           // 'vec' | 'scalar'
+  fP: null, fQ: null, fR: null,
+  fScalar: null,              // 标量函数（梯度场模式）
+  numericGrad: false,         // 梯度是否退化为数值微分
+  lastExprs: null,            // 最近一次成功编译的表达式（用于历史标签）
+  colorBy: 'div',
+  density: 16,
+  range: 4,
+  scale: 1,
+  probe: { x: 1, y: 1, z: 1 },
+  cam2d: { cx: 0, cy: 0, ppu: 60 }
+};
+const H = 1e-4;
+const INF_T = 1e7;            // 数值微分判定为 ∞ 的阈值（中心差分极限 ~1/h²）
+const IS_COARSE = window.matchMedia('(pointer:coarse)').matches;
+const TAP_SLOP = IS_COARSE ? 12 : 4;
+const TAP_MS = 450, DBL_MS = 320, DBL_DIST = 40;
+
+const $ = id => document.getElementById(id);
+const canvas = $('canvas2d'), ctx2d = canvas.getContext('2d');
+const container3d = $('container3d');
+const fields = { P: $('exprP'), Q: $('exprQ'), R: $('exprR'), F: $('exprF') };
+let lastMf = null;
+
+/* =====================================================================
+   LaTeX → math.js 表达式转换器
+===================================================================== */
+function readGroup(s, i) {
+  while (s[i] === ' ') i++;
+  if (s[i] !== '{') {
+    if (s[i] === '\\') {
+      let j = i + 1;
+      while (j < s.length && /[a-zA-Z]/.test(s[j])) j++;
+      return [s.slice(i, j), j];
+    }
+    return [s[i] || '', i + 1];
+  }
+  let depth = 0, j = i;
+  for (; j < s.length; j++) {
+    if (s[j] === '{') depth++;
+    else if (s[j] === '}') { depth--; if (!depth) break; }
+  }
+  return [s.slice(i + 1, j), j + 1];
+}
+
+function expandStruct(s) {
+  let out = '';
+  for (let i = 0; i < s.length;) {
+    if (s.startsWith('\\frac', i) || s.startsWith('\\dfrac', i) || s.startsWith('\\tfrac', i)) {
+      const skip = s[i + 1] === 'f' ? 5 : 6;
+      let num, den, j;
+      [num, j] = readGroup(s, i + skip);
+      [den, j] = readGroup(s, j);
+      out += '((' + expandStruct(num) + ')/(' + expandStruct(den) + '))';
+      i = j;
+    } else if (s.startsWith('\\sqrt', i)) {
+      let j = i + 5, idx = null;
+      while (s[j] === ' ') j++;
+      if (s[j] === '[') {
+        const k = s.indexOf(']', j);
+        idx = s.slice(j + 1, k); j = k + 1;
+      }
+      let arg; [arg, j] = readGroup(s, j);
+      out += idx
+        ? '((' + expandStruct(arg) + ')^(1/(' + expandStruct(idx) + ')))'
+        : 'sqrt(' + expandStruct(arg) + ')';
+      i = j;
+    } else if (s[i] === '^' || s[i] === '_') {
+      const op = s[i];
+      let arg, j; [arg, j] = readGroup(s, i + 1);
+      if (op === '^') out += '^(' + expandStruct(arg) + ')';
+      i = j;
+    } else if (s[i] === '{') {
+      let g, j; [g, j] = readGroup(s, i);
+      out += '(' + expandStruct(g) + ')';
+      i = j;
+    } else {
+      out += s[i]; i++;
+    }
+  }
+  return out;
+}
+
+const FN_NAMES = 'asin|acos|atan|sinh|cosh|tanh|sin|cos|tan|sec|csc|cot|exp|log10|log|sqrt|abs';
+const GREEK = 'alpha|beta|gamma|delta|varepsilon|epsilon|zeta|eta|vartheta|theta|iota|kappa|lambda|mu|nu|xi|rho|sigma|tau|upsilon|varphi|phi|chi|psi|omega';
+const CONSTS = 'pi|alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|rho|sigma|tau|upsilon|phi|chi|psi|omega';
+
+function latexToExpr(latex) {
+  let s = String(latex || '').trim();
+  if (!s) return '0';
+  if (s.includes('\\placeholder')) throw new Error('表达式不完整（存在空白占位框）');
+
+  /* 1. 去包装与等价替换 */
+  s = s.replace(/\\left|\\right/g, '');
+  s = s.replace(/\\(?:,|;|:|!|quad|qquad|\s)/g, ' ');
+  s = s.replace(/\\(?:cdot|times|ast)/g, '*');
+  s = s.replace(/\\div(?![a-zA-Z])/g, '/');
+  s = s.replace(/\\operatorname\s*\{([^{}]*)\}/g, '\\$1');
+  s = s.replace(/\\mathrm\s*\{([^{}]*)\}/g, '$1');
+  s = s.replace(/\\exponentialE/g, 'e');
+
+  /* 2. 展开结构（分数、根号、上标、花括号） */
+  s = expandStruct(s);
+
+  /* 3. 绝对值 |…| → abs(…) */
+  for (let k = 0; k < 3 && s.includes('|'); k++)
+    s = s.replace(/\|([^|]*)\|/g, 'abs($1)');
+
+  /* 4. 隐式乘法（此时函数名仍带反斜杠，不会被误拆） */
+  for (let k = 0; k < 2; k++)
+    s = s.replace(/([xyz0-9\)])\s*([xyz\(])/g, '$1*$2');
+
+  /* 5. 函数与常量命令落地 */
+  s = s.replace(/\\(arcsin|arccos|arctan)(?![a-zA-Z])/g, (m, f) => 'a' + f.slice(3));
+  s = s.replace(/\\(sinh|cosh|tanh|sin|cos|tan|sec|csc|cot|exp)(?![a-zA-Z])/g, '$1');
+  s = s.replace(/\\ln(?![a-zA-Z])/g, 'log');
+  s = s.replace(/\\log(?![a-zA-Z])/g, 'log10');
+  s = s.replace(/\\pi(?![a-zA-Z])/g, ' pi ');
+  s = s.replace(new RegExp('\\\\(' + GREEK + ')(?![a-zA-Z])', 'g'), ' $1 ');
+  s = s.replace(/\bvarepsilon\b/g, 'epsilon').replace(/\bvartheta\b/g, 'theta').replace(/\bvarphi\b/g, 'phi');
+
+  /* 6. 粘合规则：变量/数字/右括号 与 函数调用、常量之间补 * */
+  s = s.replace(new RegExp('([xyz0-9\\)])\\s*(?=(?:' + FN_NAMES + ')\\s*\\()', 'g'), '$1*');
+  s = s.replace(new RegExp('([xyz0-9\\)])\\s*(?=(?:' + CONSTS + ')(?![a-zA-Z]))', 'g'), '$1*');
+  s = s.replace(new RegExp('\\b(' + CONSTS + ')\\s+(?=[xyz0-9\\(])', 'g'), '$1*');
+  s = s.replace(/([0-9xyz\)])\s*(?=e(?![a-zA-Z]))/g, '$1*');
+  s = s.replace(/\be\s+(?=[xyz0-9\(])/g, 'e*');
+  /* 函数后未跟括号时，把紧随的单个操作数包进括号：sin x → sin(x) */
+  s = s.replace(new RegExp('\\b(' + FN_NAMES + ')\\s+(pi|[xyz]|[0-9.]+)(?![a-zA-Z0-9.])', 'g'), '$1($2)');
+
+  /* 7. 残留命令检查 */
+  const left = s.match(/\\[a-zA-Z]+/);
+  if (left) throw new Error('暂不支持的符号 ' + left[0] + '，请改用键盘上提供的符号');
+
+  s = s.replace(/\s+/g, ' ').trim();
+  return s || '0';
+}
+
+function getLatexOf(el) {
+  if (el.tagName === 'MATH-FIELD') return el.getValue ? el.getValue('latex') : (el.textContent || '');
+  return el.value || '';
+}
+function readExprFrom(el) {
+  if (el.tagName === 'MATH-FIELD') return latexToExpr(getLatexOf(el));
+  return el.value.trim() || '0';
+}
+function setFieldLatex(el, latex) {
+  if (el.setValue) el.setValue(latex, { silenceNotifications: true });
+  else if (el.tagName === 'MATH-FIELD') el.textContent = latex;
+  else el.value = latexToExpr(latex);
+}
+
+/* =====================================================================
+   MathLive 加载与数学虚拟键盘
+===================================================================== */
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = src; sc.onload = res; sc.onerror = rej;
+    document.head.appendChild(sc);
+  });
+}
+
+const FIELD_LAYOUT = {
+  label: 'f(x,y,z)',
+  tooltip: '向量场常用键',
+  rows: [
+    [
+      { latex: 'x' }, { latex: 'y' }, { latex: 'z' },
+      '[separator-5]',
+      { latex: '7' }, { latex: '8' }, { latex: '9' },
+      { latex: '\\frac{#@}{#?}' }, { latex: '\\sqrt{#0}' }
+    ],
+    [
+      { latex: '\\pi' }, { latex: 'e' }, { latex: '#@^{#?}' },
+      '[separator-5]',
+      { latex: '4' }, { latex: '5' }, { latex: '6' },
+      { latex: '+' }, { latex: '-' }
+    ],
+    [
+      { label: 'sin', insert: '\\sin(#0)' }, { label: 'cos', insert: '\\cos(#0)' }, { label: 'tan', insert: '\\tan(#0)' },
+      '[separator-5]',
+      { latex: '1' }, { latex: '2' }, { latex: '3' },
+      { latex: '\\cdot' }, { latex: '\\div' }
+    ],
+    [
+      { label: 'ln', insert: '\\ln(#0)' }, { label: 'eˣ', insert: 'e^{#0}' }, { label: '|x|', insert: '\\left|#0\\right|' },
+      '[separator-5]',
+      { latex: '0' }, { latex: '.' }, { latex: '(' }, { latex: ')' },
+      '[backspace]'
+    ],
+    [
+      { label: '√ⁿ', insert: '\\sqrt[#0]{#?}' },
+      '[left]', '[right]',
+      '[separator-10]',
+      '[hide-keyboard]'
+    ]
+  ]
+};
+
+let applyTimer = null;
+function debouncedApply() {
+  clearTimeout(applyTimer);
+  applyTimer = setTimeout(() => applyAll(true), 350);
+}
+
+function initMathFields() {
+  try { window.MathfieldElement.soundsDirectory = null; } catch (e) {}
+  try { window.mathVirtualKeyboard.layouts = [FIELD_LAYOUT, 'greek', 'numeric']; }
+  catch (e) { try { window.mathVirtualKeyboard.layouts = [FIELD_LAYOUT, 'numeric']; } catch (e2) {} }
+
+  [fields.P, fields.Q, fields.R, fields.F].forEach(mf => {
+    try { mf.menuItems = []; } catch (e) {}
+    mf.addEventListener('input', debouncedApply);
+    mf.addEventListener('change', () => applyAll());
+    mf.addEventListener('focusin', () => { lastMf = mf; });
+  });
+
+  try {
+    window.mathVirtualKeyboard.addEventListener('virtual-keyboard-toggle', () => {
+      const vk = window.mathVirtualKeyboard;
+      const h = vk.visible && vk.boundingRect ? vk.boundingRect.height : 0;
+      $('sidebar').style.paddingBottom = h ? (h + 16) + 'px' : '';
+      if (h && lastMf) setTimeout(() => lastMf.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
+    });
+  } catch (e) {}
+
+  applyAll(true);
+}
+
+function fallbackPlainInputs() {
+  ['P', 'Q', 'R', 'F'].forEach(k => {
+    const mf = fields[k];
+    if (mf.tagName !== 'MATH-FIELD') return;
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.id = mf.id; inp.spellcheck = false;
+    inp.style.flex = '1'; inp.style.minWidth = '0';
+    try { inp.value = latexToExpr(mf.textContent || ''); } catch (e) { inp.value = mf.textContent || ''; }
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') applyAll(); });
+    inp.addEventListener('input', debouncedApply);
+    mf.replaceWith(inp);
+    fields[k] = inp;
+  });
+  $('errBox').textContent = '数学键盘组件加载失败（需联网），已回退为文本输入（math.js 语法，如 sqrt(x^2+y^2)）。';
+  $('kbToggle').style.display = 'none';
+  applyAll(true);
+}
+
+loadScript('https://cdnjs.cloudflare.com/ajax/libs/mathlive/0.98.6/mathlive.min.js')
+  .catch(() => loadScript('https://cdn.jsdelivr.net/npm/mathlive@0.98.6/dist/mathlive.min.js'))
+  .catch(() => loadScript('https://unpkg.com/mathlive@0.98.6/dist/mathlive.min.js'))
+  .then(() => customElements.whenDefined('math-field'))
+  .then(initMathFields)
+  .catch(fallbackPlainInputs);
+
+$('kbToggle').addEventListener('click', () => {
+  const mf = lastMf || (state.inputType === 'scalar' ? fields.F : fields.P);
+  if (mf.focus) mf.focus();
+  try { window.mathVirtualKeyboard.show(); } catch (e) {}
+});
+
+/* =====================================================================
+   表达式编译（向量场 / 标量函数取梯度）
+===================================================================== */
+const dstr = (expr, v) => math.simplify(math.derivative(math.parse(expr), v)).toString();
+
+function numDerivComp(fc, varName) {           // 数值偏导包装成可 evaluate 的对象
+  return {
+    evaluate(sc) {
+      const v = Number(sc[varName]) || 0;
+      const h = H * Math.max(1, Math.abs(v));
+      const s1 = { x: sc.x, y: sc.y, z: sc.z }; s1[varName] = v + h;
+      const s2 = { x: sc.x, y: sc.y, z: sc.z }; s2[varName] = v - h;
+      return (Number(fc.evaluate(s1)) - Number(fc.evaluate(s2))) / (2 * h);
+    }
+  };
+}
+
+function niceError(err) {
+  const m = /Undefined symbol (\w+)/.exec(err.message || '');
+  if (m) return '未定义的符号 ' + m[1] + '（希腊字母仅作记号，请替换为具体数值后再绘图）';
+  return err.message;
+}
+
+function compileField(silent) {
+  try {
+    let eP, eQ, eR;
+    if (state.inputType === 'scalar') {
+      const fE = readExprFrom(fields.F);
+      state.fScalar = math.compile(fE);
+      let gradOK = true;
+      try {
+        eP = dstr(fE, 'x');
+        eQ = dstr(fE, 'y');
+        eR = state.mode === '3d' ? dstr(fE, 'z') : '0';
+      } catch (e) { gradOK = false; }
+      if (gradOK) {
+        state.fP = math.compile(eP);
+        state.fQ = math.compile(eQ);
+        state.fR = math.compile(eR);
+        state.numericGrad = false;
+      } else {
+        state.fP = numDerivComp(state.fScalar, 'x');
+        state.fQ = numDerivComp(state.fScalar, 'y');
+        state.fR = state.mode === '3d' ? numDerivComp(state.fScalar, 'z') : math.compile('0');
+        eP = '∂f/∂x（数值）'; eQ = '∂f/∂y（数值）'; eR = state.mode === '3d' ? '∂f/∂z（数值）' : '0';
+        state.numericGrad = true;
+      }
+      state.lastExprs = { type: 'scalar', fE, eP, eQ, eR };
+      evalField(0.5, 0.5, 0.5);
+      updateSymbolicScalar(fE, eP, eQ, eR);
+    } else {
+      eP = readExprFrom(fields.P);
+      eQ = readExprFrom(fields.Q);
+      eR = readExprFrom(fields.R);
+      state.fScalar = null; state.numericGrad = false;
+      state.fP = math.compile(eP);
+      state.fQ = math.compile(eQ);
+      state.fR = math.compile(eR);
+      state.lastExprs = { type: 'vec', eP, eQ, eR };
+      evalField(0.5, 0.5, 0.5);
+      updateSymbolic(eP, eQ, eR);
+    }
+    $('errBox').textContent = '';
+    return true;
+  } catch (err) {
+    if (!silent) $('errBox').textContent = '表达式错误：' + niceError(err);
+    return false;
+  }
+}
+
+/* 渲染用求值：非有限值压为 0，保证画面稳定 */
+function evalField(x, y, z) {
+  const sc = { x, y, z: z || 0 };
+  let p = Number(state.fP.evaluate(sc)), q = Number(state.fQ.evaluate(sc)), r = Number(state.fR.evaluate(sc));
+  if (!isFinite(p)) p = 0; if (!isFinite(q)) q = 0; if (!isFinite(r)) r = 0;
+  return [p, q, r];
+}
+/* 探针用求值：保留 Infinity / NaN，原样上报 */
+function rawField(x, y, z) {
+  const sc = { x, y, z: z || 0 };
+  return [Number(state.fP.evaluate(sc)), Number(state.fQ.evaluate(sc)), Number(state.fR.evaluate(sc))];
+}
+
+function makePartial(evalFn) {
+  return function (comp, varIdx, x, y, z) {
+    const pos = [x, y, z || 0];
+    const h = H * Math.max(1, Math.abs(pos[varIdx]));
+    pos[varIdx] += h; const a = evalFn(pos[0], pos[1], pos[2])[comp];
+    pos[varIdx] -= 2 * h; const b = evalFn(pos[0], pos[1], pos[2])[comp];
+    return (a - b) / (2 * h);
+  };
+}
+const partial = makePartial(evalField);
+const rawPartial = makePartial(rawField);
+
+function makeDiv(partialFn) {
+  return function (x, y, z) {
+    let d = partialFn(0, 0, x, y, z) + partialFn(1, 1, x, y, z);
+    if (state.mode === '3d') d += partialFn(2, 2, x, y, z);
+    return d;
+  };
+}
+function makeCurl(partialFn) {
+  return function (x, y, z) {
+    const cz = partialFn(1, 0, x, y, z) - partialFn(0, 1, x, y, z);
+    if (state.mode === '2d') return cz;
+    const cx = partialFn(2, 1, x, y, z) - partialFn(1, 2, x, y, z);
+    const cy = partialFn(0, 2, x, y, z) - partialFn(2, 0, x, y, z);
+    return [cx, cy, cz];
+  };
+}
+const divergence = makeDiv(partial),  curl = makeCurl(partial);
+const rawDiv     = makeDiv(rawPartial), rawCurl = makeCurl(rawPartial);
+
+function updateSymbolic(eP, eQ, eR) {
+  try {
+    if (state.mode === '2d') {
+      $('symDiv').textContent = '∇·F = ' + dstr(eP,'x') + ' + ' + dstr(eQ,'y');
+      $('symCurl').textContent = '(∇×F)·k = ' + dstr(eQ,'x') + ' − (' + dstr(eP,'y') + ')';
+    } else {
+      $('symDiv').textContent = '∇·F = ' + dstr(eP,'x') + ' + ' + dstr(eQ,'y') + ' + ' + dstr(eR,'z');
+      $('symCurl').textContent =
+        '∇×F = ⟨ ' + dstr(eR,'y') + ' − (' + dstr(eQ,'z') + '),  ' +
+        dstr(eP,'z') + ' − (' + dstr(eR,'x') + '),  ' +
+        dstr(eQ,'x') + ' − (' + dstr(eP,'y') + ') ⟩';
+    }
+    $('symDiv').style.display = $('symCurl').style.display = 'block';
+  } catch (e) {
+    $('symDiv').style.display = $('symCurl').style.display = 'none';
+  }
+}
+function updateSymbolicScalar(fE, eP, eQ, eR) {
+  try {
+    const is3 = state.mode === '3d';
+    $('symDiv').textContent = '∇f = ⟨ ' + eP + ',  ' + eQ + (is3 ? ',  ' + eR : '') + ' ⟩';
+    if (state.numericGrad) {
+      $('symCurl').textContent = 'Δf 与旋度由数值微分计算；∇×(∇f) ≡ 0（梯度场恒无旋）';
+    } else {
+      const lap = is3
+        ? dstr(eP,'x') + ' + ' + dstr(eQ,'y') + ' + ' + dstr(eR,'z')
+        : dstr(eP,'x') + ' + ' + dstr(eQ,'y');
+      $('symCurl').textContent = '∇·(∇f) = Δf = ' + lap + '；∇×(∇f) ≡ 0';
+    }
+    $('symDiv').style.display = $('symCurl').style.display = 'block';
+  } catch (e) {
+    $('symDiv').style.display = $('symCurl').style.display = 'none';
+  }
+}
+
+/* =====================================================================
+   颜色映射
+===================================================================== */
+function lerp(a, b, t){ return a + (b - a) * t; }
+function diverging(t) {
+  t = Math.max(-1, Math.min(1, t));
+  const neg = [60, 201, 255], mid = [95, 110, 133], pos = [255, 154, 60];
+  let c;
+  if (t < 0) { const u = t + 1; c = [lerp(neg[0],mid[0],u), lerp(neg[1],mid[1],u), lerp(neg[2],mid[2],u)]; }
+  else       { const u = t;     c = [lerp(mid[0],pos[0],u), lerp(mid[1],pos[1],u), lerp(mid[2],pos[2],u)]; }
+  return c.map(Math.round);
+}
+const rgbStr = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+function robustMax(vals) {
+  const a = vals.map(Math.abs).filter(isFinite).sort((x, y) => x - y);
+  if (!a.length) return 1;
+  const v = a[Math.min(a.length - 1, Math.floor(a.length * 0.92))];
+  return v > 1e-9 ? v : 1;
+}
+
+/* =====================================================================
+   2D 渲染
+===================================================================== */
+function resize2d() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = r.width * dpr; canvas.height = r.height * dpr;
+  ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+const w2s = (x, y) => {
+  const r = canvas.getBoundingClientRect();
+  return [r.width / 2 + (x - state.cam2d.cx) * state.cam2d.ppu,
+          r.height / 2 - (y - state.cam2d.cy) * state.cam2d.ppu];
+};
+const s2w = (sx, sy) => {
+  const r = canvas.getBoundingClientRect();
+  return [state.cam2d.cx + (sx - r.width / 2) / state.cam2d.ppu,
+          state.cam2d.cy - (sy - r.height / 2) / state.cam2d.ppu];
+};
+
+function drawArrow(x1, y1, x2, y2, w, color) {
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+  if (len < 0.5) return;
+  const ux = dx / len, uy = dy / len, hs = Math.min(9, Math.max(4, len * 0.32));
+  ctx2d.strokeStyle = color; ctx2d.fillStyle = color; ctx2d.lineWidth = w;
+  ctx2d.beginPath(); ctx2d.moveTo(x1, y1); ctx2d.lineTo(x2 - ux * hs * 0.6, y2 - uy * hs * 0.6); ctx2d.stroke();
+  ctx2d.beginPath();
+  ctx2d.moveTo(x2, y2);
+  ctx2d.lineTo(x2 - ux * hs - uy * hs * 0.45, y2 - uy * hs + ux * hs * 0.45);
+  ctx2d.lineTo(x2 - ux * hs + uy * hs * 0.45, y2 - uy * hs - ux * hs * 0.45);
+  ctx2d.closePath(); ctx2d.fill();
+}
+
+let rafPending2d = false;
+function render2d() {
+  if (rafPending2d) return;
+  rafPending2d = true;
+  requestAnimationFrame(() => { rafPending2d = false; render2dNow(); });
+}
+
+function render2dNow() {
+  if (state.mode !== '2d' || !state.fP) return;
+  const r = canvas.getBoundingClientRect();
+  ctx2d.clearRect(0, 0, r.width, r.height);
+
+  const step = niceStep(80 / state.cam2d.ppu);
+  const [xmin, ymax] = s2w(0, 0), [xmax, ymin] = s2w(r.width, r.height);
+  ctx2d.lineWidth = 1; ctx2d.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  for (let x = Math.ceil(xmin / step) * step; x <= xmax; x += step) {
+    const [sx] = w2s(x, 0);
+    ctx2d.strokeStyle = Math.abs(x) < step / 2 ? '#3a4d6e' : '#19243a';
+    ctx2d.beginPath(); ctx2d.moveTo(sx, 0); ctx2d.lineTo(sx, r.height); ctx2d.stroke();
+    if (Math.abs(x) > step / 2) { ctx2d.fillStyle = '#5d6f8c'; ctx2d.fillText(fmtTick(x), sx + 3, r.height - 6); }
+  }
+  for (let y = Math.ceil(ymin / step) * step; y <= ymax; y += step) {
+    const [, sy] = w2s(0, y);
+    ctx2d.strokeStyle = Math.abs(y) < step / 2 ? '#3a4d6e' : '#19243a';
+    ctx2d.beginPath(); ctx2d.moveTo(0, sy); ctx2d.lineTo(r.width, sy); ctx2d.stroke();
+    if (Math.abs(y) > step / 2) { ctx2d.fillStyle = '#5d6f8c'; ctx2d.fillText(fmtTick(y), 5, sy - 4); }
+  }
+
+  const n = state.density;
+  const span = 2 * state.range;
+  const cell = span / n;
+  const xs = [], samples = [];
+  const x0 = Math.floor(xmin / cell) * cell, x1 = Math.ceil(xmax / cell) * cell;
+  const y0 = Math.floor(ymin / cell) * cell, y1 = Math.ceil(ymax / cell) * cell;
+  const maxCells = 4000; let count = 0;
+  for (let x = x0; x <= x1 && count < maxCells; x += cell)
+    for (let y = y0; y <= y1 && count < maxCells; y += cell, count++) {
+      const [p, q] = evalField(x, y, 0);
+      const s = state.colorBy === 'div' ? divergence(x, y, 0) : curl(x, y, 0);
+      samples.push({ x, y, p, q, s: isFinite(s) ? s : 0, mag: Math.hypot(p, q) });
+      xs.push(isFinite(s) ? s : 0);
+    }
+  const sMax = robustMax(xs);
+  const mMax = robustMax(samples.map(o => o.mag));
+  $('legMin').textContent = '−' + fmtNum(sMax);
+  $('legMax').textContent = '+' + fmtNum(sMax);
+
+  const cellPx = cell * state.cam2d.ppu;
+  for (const o of samples) {
+    if (o.mag < 1e-12) continue;
+    const L = cellPx * 0.85 * state.scale * Math.tanh(1.4 * o.mag / mMax);
+    const ux = o.p / o.mag, uy = o.q / o.mag;
+    const [sx, sy] = w2s(o.x, o.y);
+    drawArrow(sx - ux * L / 2, sy + uy * L / 2, sx + ux * L / 2, sy - uy * L / 2,
+              1.6, rgbStr(diverging(o.s / sMax)));
+  }
+
+  drawProbe2d();
+}
+
+function fmtTick(v){ return Math.abs(v) >= 1000 ? v.toExponential(0) : +v.toFixed(3) + ''; }
+function niceStep(raw) {
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const m = raw / p;
+  return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+}
+
+function drawProbe2d() {
+  const { x, y } = state.probe;
+  const [sx, sy] = w2s(x, y);
+  const d = divergence(x, y, 0), c = curl(x, y, 0);
+  const R = 22;
+
+  ctx2d.save();
+  ctx2d.strokeStyle = '#ffd166'; ctx2d.lineWidth = 1.4;
+  ctx2d.beginPath(); ctx2d.moveTo(sx - 7, sy); ctx2d.lineTo(sx + 7, sy);
+  ctx2d.moveTo(sx, sy - 7); ctx2d.lineTo(sx, sy + 7); ctx2d.stroke();
+
+  if (isFinite(c) && Math.abs(c) > 1e-9) {
+    ctx2d.strokeStyle = 'rgba(199,123,255,.95)'; ctx2d.lineWidth = 2;
+    const ccw = c > 0;
+    ctx2d.beginPath(); ctx2d.arc(sx, sy, R, -0.4, Math.PI * 1.25, ccw); ctx2d.stroke();
+    const endA = ccw ? -0.4 : Math.PI * 1.25;
+    const ex = sx + R * Math.cos(endA), ey = sy + R * Math.sin(endA);
+    const tA = endA + (ccw ? -0.28 : 0.28);
+    const tx = sx + R * Math.cos(tA), ty = sy + R * Math.sin(tA);
+    drawArrow(ex, ey, ex + (ex - tx) * 1.4, ey + (ey - ty) * 1.4, 2, 'rgba(199,123,255,.95)');
+  }
+  if (isFinite(d) && Math.abs(d) > 1e-9) {
+    const col = d > 0 ? getCss('--source') : getCss('--sink');
+    for (let k = 0; k < 4; k++) {
+      const a = Math.PI / 4 + k * Math.PI / 2;
+      const r1 = d > 0 ? R + 5 : R + 13, r2 = d > 0 ? R + 13 : R + 5;
+      drawArrow(sx + r1 * Math.cos(a), sy + r1 * Math.sin(a),
+                sx + r2 * Math.cos(a), sy + r2 * Math.sin(a), 1.6, col);
+    }
+  }
+  ctx2d.restore();
+}
+const getCss = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* =====================================================================
+   2D 多点触控手势
+===================================================================== */
+const ptrs2d = new Map();
+let g2d = null;
+let lastTap2d = { t: 0, x: 0, y: 0 };
+
+const canvasXY = e => {
+  const r = canvas.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+};
+
+function startPan2d(e) {
+  g2d = {
+    type: 'pan',
+    sx: e.clientX, sy: e.clientY,
+    cx: state.cam2d.cx, cy: state.cam2d.cy,
+    moved: false, t0: performance.now()
+  };
+}
+function startPinch2d() {
+  const [a, b] = [...ptrs2d.values()];
+  const r = canvas.getBoundingClientRect();
+  const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+  const [wx, wy] = s2w(mx, my);
+  g2d = {
+    type: 'pinch',
+    d0: Math.max(8, Math.hypot(a.x - b.x, a.y - b.y)),
+    ppu0: state.cam2d.ppu,
+    wx, wy
+  };
+}
+
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
+  ptrs2d.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs2d.size === 1) startPan2d(e);
+  else if (ptrs2d.size === 2) startPinch2d();
+  else g2d = null;
+});
+
+canvas.addEventListener('pointermove', e => {
+  if (!ptrs2d.has(e.pointerId)) return;
+  ptrs2d.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (!g2d) return;
+
+  if (g2d.type === 'pan' && ptrs2d.size === 1) {
+    const dx = e.clientX - g2d.sx, dy = e.clientY - g2d.sy;
+    if (Math.hypot(dx, dy) > TAP_SLOP) g2d.moved = true;
+    if (g2d.moved) {
+      state.cam2d.cx = g2d.cx - dx / state.cam2d.ppu;
+      state.cam2d.cy = g2d.cy + dy / state.cam2d.ppu;
+      render2d();
+    }
+  } else if (g2d.type === 'pinch' && ptrs2d.size >= 2) {
+    const [a, b] = [...ptrs2d.values()];
+    const d = Math.max(8, Math.hypot(a.x - b.x, a.y - b.y));
+    state.cam2d.ppu = Math.min(2000, Math.max(4, g2d.ppu0 * d / g2d.d0));
+    const r = canvas.getBoundingClientRect();
+    const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+    state.cam2d.cx = g2d.wx - (mx - r.width / 2) / state.cam2d.ppu;
+    state.cam2d.cy = g2d.wy + (my - r.height / 2) / state.cam2d.ppu;
+    render2d();
+  }
+});
+
+function endPointer2d(e) {
+  const wasPan = g2d && g2d.type === 'pan';
+  const tapCandidate = wasPan && !g2d.moved &&
+                       (performance.now() - g2d.t0) < TAP_MS &&
+                       e.type === 'pointerup';
+  ptrs2d.delete(e.pointerId);
+
+  if (tapCandidate) {
+    const now = performance.now();
+    const isDbl = (now - lastTap2d.t) < DBL_MS &&
+                  Math.hypot(e.clientX - lastTap2d.x, e.clientY - lastTap2d.y) < DBL_DIST;
+    if (isDbl) {
+      lastTap2d.t = 0;
+      resetView2d();
+    } else {
+      lastTap2d = { t: now, x: e.clientX, y: e.clientY };
+      const [sx, sy] = canvasXY(e);
+      const [wx, wy] = s2w(sx, sy);
+      setProbe(+wx.toFixed(3), +wy.toFixed(3), state.probe.z);
+    }
+  }
+
+  if (ptrs2d.size === 1) {
+    const [remaining] = [...ptrs2d.values()];
+    startPan2d({ clientX: remaining.x, clientY: remaining.y });
+    g2d.moved = true;
+  } else if (ptrs2d.size === 0) {
+    g2d = null;
+  } else if (ptrs2d.size === 2) {
+    startPinch2d();
+  }
+}
+canvas.addEventListener('pointerup', endPointer2d);
+canvas.addEventListener('pointercancel', endPointer2d);
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const [sx, sy] = canvasXY(e);
+  const [wx, wy] = s2w(sx, sy);
+  const f = Math.exp(-e.deltaY * 0.0012);
+  state.cam2d.ppu = Math.min(2000, Math.max(4, state.cam2d.ppu * f));
+  const [nx, ny] = s2w(sx, sy);
+  state.cam2d.cx += wx - nx; state.cam2d.cy += wy - ny;
+  render2d();
+}, { passive: false });
+
+canvas.addEventListener('dblclick', e => { if (e.pointerType !== 'touch') resetView2d(); });
+
+function resetView2d() {
+  state.cam2d = { cx: 0, cy: 0, ppu: Math.min(canvas.clientWidth, canvas.clientHeight) / (2.2 * state.range) };
+  render2d();
+}
+
+/* =====================================================================
+   3D 渲染（three.js + 多点触控轨道）
+===================================================================== */
+let renderer, scene, camera, arrowGroup, probeGroup;
+const orbit = { theta: Math.PI / 4, phi: Math.PI / 3, dist: 14 };
+
+function init3d() {
+  if (renderer) return;
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  container3d.appendChild(renderer.domElement);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.6); dl.position.set(5, 8, 6); scene.add(dl);
+
+  arrowGroup = new THREE.Group(); scene.add(arrowGroup);
+  probeGroup = new THREE.Group(); scene.add(probeGroup);
+
+  const el = renderer.domElement;
+  const ptrs3d = new Map();
+  let g3d = null;
+  let lastTap3d = 0;
+
+  const startOrbit = e => {
+    g3d = { type: 'orbit', x: e.clientX, y: e.clientY, t: orbit.theta, p: orbit.phi, t0: performance.now(), moved: false };
+  };
+  const startPinch3d = () => {
+    const [a, b] = [...ptrs3d.values()];
+    g3d = { type: 'pinch', d0: Math.max(8, Math.hypot(a.x - b.x, a.y - b.y)), dist0: orbit.dist };
+  };
+
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    ptrs3d.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs3d.size === 1) startOrbit(e);
+    else if (ptrs3d.size === 2) startPinch3d();
+    else g3d = null;
+  });
+
+  el.addEventListener('pointermove', e => {
+    if (!ptrs3d.has(e.pointerId)) return;
+    ptrs3d.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!g3d) return;
+
+    if (g3d.type === 'orbit' && ptrs3d.size === 1) {
+      const dx = e.clientX - g3d.x, dy = e.clientY - g3d.y;
+      if (Math.hypot(dx, dy) > TAP_SLOP) g3d.moved = true;
+      const k = 5.2 / Math.max(320, el.clientWidth);
+      orbit.theta = g3d.t - dx * k;
+      orbit.phi = Math.min(Math.PI - 0.08, Math.max(0.08, g3d.p - dy * k));
+      updateCamera(); renderer.render(scene, camera);
+    } else if (g3d.type === 'pinch' && ptrs3d.size >= 2) {
+      const [a, b] = [...ptrs3d.values()];
+      const d = Math.max(8, Math.hypot(a.x - b.x, a.y - b.y));
+      orbit.dist = Math.min(120, Math.max(2, g3d.dist0 * g3d.d0 / d));
+      updateCamera(); renderer.render(scene, camera);
+    }
+  });
+
+  const end3d = e => {
+    const wasOrbit = g3d && g3d.type === 'orbit';
+    const tap = wasOrbit && !g3d.moved && (performance.now() - g3d.t0) < TAP_MS && e.type === 'pointerup';
+    ptrs3d.delete(e.pointerId);
+    if (tap) {
+      const now = performance.now();
+      if (now - lastTap3d < DBL_MS) {
+        lastTap3d = 0;
+        orbit.theta = Math.PI / 4; orbit.phi = Math.PI / 3; orbit.dist = state.range * 3.5;
+        updateCamera(); renderer.render(scene, camera);
+      } else lastTap3d = now;
+    }
+    if (ptrs3d.size === 1) {
+      const [remaining] = [...ptrs3d.values()];
+      startOrbit({ clientX: remaining.x, clientY: remaining.y });
+      g3d.moved = true;
+    } else if (ptrs3d.size === 0) g3d = null;
+    else if (ptrs3d.size === 2) startPinch3d();
+  };
+  el.addEventListener('pointerup', end3d);
+  el.addEventListener('pointercancel', end3d);
+
+  el.addEventListener('wheel', e => {
+    e.preventDefault();
+    orbit.dist = Math.min(120, Math.max(2, orbit.dist * Math.exp(e.deltaY * 0.0012)));
+    updateCamera(); renderer.render(scene, camera);
+  }, { passive: false });
+}
+
+function updateCamera() {
+  const { theta, phi, dist } = orbit;
+  camera.position.set(dist * Math.sin(phi) * Math.cos(theta),
+                      dist * Math.cos(phi),
+                      dist * Math.sin(phi) * Math.sin(theta));
+  camera.lookAt(0, 0, 0);
+}
+function resize3d() {
+  if (!renderer) return;
+  const w = container3d.clientWidth, h = container3d.clientHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+const toScene = (x, y, z) => new THREE.Vector3(x, z, -y);
+
+function render3d() {
+  if (state.mode !== '3d' || !state.fP) return;
+  init3d(); resize3d();
+
+  while (arrowGroup.children.length) {
+    const c = arrowGroup.children.pop();
+    c.traverse && c.traverse(o => { o.geometry && o.geometry.dispose(); o.material && o.material.dispose(); });
+    if (c.dispose) c.dispose();
+  }
+
+  const R = state.range;
+  const n = Math.max(4, Math.min(11, Math.round(state.density / 2)));
+  const cell = 2 * R / (n - 1);
+
+  const axisLen = R * 1.25;
+  const mkAxis = (dir, color) => {
+    const m = new THREE.LineBasicMaterial({ color });
+    const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),
+      toScene(dir[0]*axisLen, dir[1]*axisLen, dir[2]*axisLen)]);
+    arrowGroup.add(new THREE.Line(g, m));
+  };
+  mkAxis([1,0,0], 0x8a5a5a); mkAxis([0,1,0], 0x5a8a5a); mkAxis([0,0,1], 0x5a6a9a);
+  const grid = new THREE.GridHelper(2 * R, 8, 0x2a3a58, 0x1b2740);
+  arrowGroup.add(grid);
+
+  const pts = [], svals = [], mags = [];
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) for (let k = 0; k < n; k++) {
+    const x = -R + i * cell, y = -R + j * cell, z = -R + k * cell;
+    const [p, q, r] = evalField(x, y, z);
+    const mag = Math.hypot(p, q, r);
+    let s;
+    if (state.colorBy === 'div') s = divergence(x, y, z);
+    else { const c = curl(x, y, z); s = Math.hypot(c[0], c[1], c[2]); }
+    if (!isFinite(s)) s = 0;
+    pts.push({ x, y, z, p, q, r, mag, s });
+    svals.push(s); mags.push(mag);
+  }
+  const sMax = robustMax(svals), mMax = robustMax(mags);
+  $('legMin').textContent = state.colorBy === 'curl' ? '0' : '−' + fmtNum(sMax);
+  $('legMax').textContent = (state.colorBy === 'curl' ? '' : '+') + fmtNum(sMax);
+
+  for (const o of pts) {
+    if (o.mag < 1e-12) continue;
+    const dir = toScene(o.p, o.q, o.r).normalize();
+    const len = cell * 0.95 * state.scale * Math.tanh(1.4 * o.mag / mMax);
+    const t = o.s / sMax;
+    const c = diverging(Math.max(-1, Math.min(1, t)));
+    const col = new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255);
+    const ah = new THREE.ArrowHelper(dir, toScene(o.x, o.y, o.z).sub(dir.clone().multiplyScalar(len/2)),
+                                     len, col, len * 0.38, len * 0.22);
+    arrowGroup.add(ah);
+  }
+
+  drawProbe3d();
+  updateCamera();
+  renderer.render(scene, camera);
+}
+
+function drawProbe3d() {
+  while (probeGroup.children.length) {
+    const c = probeGroup.children.pop();
+    c.traverse && c.traverse(o => { o.geometry && o.geometry.dispose(); o.material && o.material.dispose(); });
+  }
+  if (state.mode !== '3d') return;
+  const { x, y, z } = state.probe;
+  const pos = toScene(x, y, z);
+  const d = divergence(x, y, z);
+
+  const col = d > 1e-9 ? 0xff9a3c : d < -1e-9 ? 0x3cc9ff : 0xffd166;
+  const sph = new THREE.Mesh(new THREE.SphereGeometry(state.range * 0.035, 18, 14),
+                             new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.45 }));
+  sph.position.copy(pos); probeGroup.add(sph);
+
+  const c = curl(x, y, z);
+  const cm = Math.hypot(c[0], c[1], c[2]);
+  if (isFinite(cm) && cm > 1e-9) {
+    const dir = toScene(c[0], c[1], c[2]).normalize();
+    const len = state.range * 0.5;
+    probeGroup.add(new THREE.ArrowHelper(dir, pos, len, 0xc77bff, len * 0.3, len * 0.16));
+  }
+  if (renderer) renderer.render(scene, camera);
+}
+
+/* =====================================================================
+   探针与读数（含 ∞ 判定）
+===================================================================== */
+function setProbe(x, y, z, fromInput) {
+  state.probe = { x, y, z };
+  if (!fromInput) { $('px').value = x; $('py').value = y; $('pz').value = z; }
+  updateReadout();
+  if (state.mode === '2d') render2d(); else drawProbe3d();
+}
+
+function fmtNum(v) {
+  if (!isFinite(v)) return 'NaN';
+  const a = Math.abs(v);
+  if (a !== 0 && (a >= 1e5 || a < 1e-3)) return v.toExponential(3);
+  return (+v.toFixed(4)).toString();
+}
+/* 探针读数格式：无穷直接输出 ∞，未定义（如奇点处 0/0）标明 */
+function fmtVal(v) {
+  if (Number.isNaN(v)) return '未定义';
+  if (v === Infinity || v >= INF_T) return '+∞';
+  if (v === -Infinity || v <= -INF_T) return '−∞';
+  return fmtNum(v);
+}
+const isInfVal = v => Number.isNaN(v) || !isFinite(v) || Math.abs(v) >= INF_T;
+
+function updateReadout() {
+  if (!state.fP) return;
+  const { x, y, z } = state.probe;
+  const is3 = state.mode === '3d';
+  const zz = is3 ? z : 0;
+  const F = rawField(x, y, zz);
+  const d = rawDiv(x, y, zz);
+  const c = rawCurl(x, y, zz);
+  const scalar = state.inputType === 'scalar';
+
+  $('probe-pos').textContent = is3
+    ? `P = (${fmtNum(x)}, ${fmtNum(y)}, ${fmtNum(z)})`
+    : `P = (${fmtNum(x)}, ${fmtNum(y)})`;
+
+  /* 标量函数模式：额外显示 f(P) */
+  $('rowFval').style.display = scalar ? 'flex' : 'none';
+  if (scalar && state.fScalar) {
+    let fv;
+    try { fv = Number(state.fScalar.evaluate({ x, y, z: zz })); } catch (e) { fv = NaN; }
+    $('vFs').textContent = fmtVal(fv);
+  }
+  $('nameFvec').textContent = scalar ? '∇f(P)　梯度' : 'F(P)　场值';
+  $('nameDiv').textContent = scalar ? '∇·∇f = Δf　散度' : '∇·F　散度';
+  $('nameCurl').textContent = scalar ? '∇×∇f　旋度' : '∇×F　旋度';
+
+  $('vF').textContent = is3
+    ? `⟨${fmtVal(F[0])}, ${fmtVal(F[1])}, ${fmtVal(F[2])}⟩`
+    : `⟨${fmtVal(F[0])}, ${fmtVal(F[1])}⟩`;
+
+  const vd = $('vDiv');
+  vd.textContent = fmtVal(d);
+  vd.className = 'val ' + (isInfVal(d) ? (d > 0 ? 'div-pos' : d < 0 ? 'div-neg' : '')
+                                       : (d > 1e-9 ? 'div-pos' : d < -1e-9 ? 'div-neg' : ''));
+
+  let curlTxt, curlMag;
+  if (is3) {
+    curlTxt = `⟨${fmtVal(c[0])}, ${fmtVal(c[1])}, ${fmtVal(c[2])}⟩`;
+    curlMag = Math.hypot(c[0], c[1], c[2]);
+    if ([c[0], c[1], c[2]].some(Number.isNaN)) curlMag = NaN;
+  } else {
+    curlTxt = fmtVal(c) + (isInfVal(c) ? '' : ' k');
+    curlMag = Math.abs(c);
+  }
+  $('vCurl').textContent = curlTxt;
+
+  /* 物理解读 */
+  const eps = 1e-6;
+  let s1, s2;
+  if (Number.isNaN(d)) s1 = '该点散度<b>未定义</b>（可能位于奇点正上方）';
+  else if (isInfVal(d)) s1 = `该点是<b>奇点</b>：散度发散，∇·F → ${d > 0 ? '+∞（无穷强的源）' : '−∞（无穷强的汇）'}`;
+  else if (Math.abs(d) < eps) s1 = '该点近似<b>无源</b>（∇·F ≈ 0）';
+  else if (d > 0) s1 = `该点是<b>源</b>：流体净流出，膨胀率 ${fmtNum(d)}`;
+  else s1 = `该点是<b>汇</b>：流体净流入，收缩率 ${fmtNum(Math.abs(d))}`;
+
+  if (Number.isNaN(curlMag)) s2 = '旋度<b>未定义</b>（奇点）';
+  else if (isInfVal(curlMag)) s2 = '旋度<b>发散</b>（|∇×F| → ∞，奇点附近无穷快旋转）';
+  else if (curlMag < eps) s2 = scalar
+      ? '梯度场恒<b>无旋</b>（∇×∇f ≡ 0），数值验证 ≈ 0'
+      : '局部<b>无旋</b>(∇×F ≈ 0)，小桨轮不转动';
+  else if (is3) s2 = `存在旋转，角速度方向沿旋度向量，|∇×F| = ${fmtNum(curlMag)}（≈ 2× 局部角速度）`;
+  else s2 = (c > 0 ? '小桨轮<b>逆时针</b>旋转' : '小桨轮<b>顺时针</b>旋转') + `，|curl| = ${fmtNum(curlMag)}`;
+
+  if (scalar && !Number.isNaN(d) && !isInfVal(d))
+    s1 += `（即拉普拉斯 Δf = ${fmtNum(d)}）`;
+
+  $('vInterp').innerHTML = s1 + '。<br>' + s2 + '。';
+}
+
+/* =====================================================================
+   预设场（LaTeX）
+===================================================================== */
+const PRESETS = {
+  '2d': [
+    ['刚体旋转  ⟨−y, x⟩（纯旋）', 'vec', '-y', 'x', '0'],
+    ['径向源场  ⟨x, y⟩（纯散）', 'vec', 'x', 'y', '0'],
+    ['鞍点场  ⟨x, −y⟩（无散无旋）', 'vec', 'x', '-y', '0'],
+    ['剪切流  ⟨y, 0⟩', 'vec', 'y', '0', '0'],
+    ['螺旋汇  ⟨−x−y, x−y⟩', 'vec', '-x-y', 'x-y', '0'],
+    ['点涡  ⟨−y, x⟩/(x²+y²)', 'vec', '\\frac{-y}{x^2+y^2}', '\\frac{x}{x^2+y^2}', '0'],
+    ['波动场  ⟨sin y, sin x⟩', 'vec', '\\sin(y)', '\\sin(x)', '0'],
+    ['偶极场', 'vec', '\\frac{x^2-y^2}{(x^2+y^2)^2}', '\\frac{2xy}{(x^2+y^2)^2}', '0'],
+    ['标量：抛物面  f = x²+y²', 'scalar', 'x^2+y^2'],
+    ['标量：鞍面  f = x²−y²', 'scalar', 'x^2-y^2'],
+    ['标量：对数奇点  f = ln(x²+y²)', 'scalar', '\\ln(x^2+y^2)'],
+    ['标量：高斯丘  f = e^(−x²−y²)', 'scalar', 'e^{-x^2-y^2}']
+  ],
+  '3d': [
+    ['绕 z 轴旋转  ⟨−y, x, 0⟩', 'vec', '-y', 'x', '0'],
+    ['径向爆炸  ⟨x, y, z⟩', 'vec', 'x', 'y', 'z'],
+    ['螺旋上升  ⟨−y, x, 1⟩', 'vec', '-y', 'x', '1'],
+    ['汇聚下沉  ⟨−x, −y, −z/2⟩', 'vec', '-x', '-y', '\\frac{-z}{2}'],
+    ['ABC 流（混沌）', 'vec', '\\sin(z)+\\cos(y)', '\\sin(x)+\\cos(z)', '\\sin(y)+\\cos(x)'],
+    ['环形磁场样式', 'vec', '\\frac{-y}{x^2+y^2}', '\\frac{x}{x^2+y^2}', '0'],
+    ['剪切 + 旋转  ⟨z, 0, −x⟩', 'vec', 'z', '0', '-x'],
+    ['标量：球势  f = x²+y²+z²', 'scalar', 'x^2+y^2+z^2'],
+    ['标量：点电荷势  f = 1/√(x²+y²+z²)', 'scalar', '\\frac{1}{\\sqrt{x^2+y^2+z^2}}']
+  ]
+};
+function fillPresets() {
+  const sel = $('preset');
+  sel.innerHTML = '<option value="-1">— 选择预设 —</option>' +
+    PRESETS[state.mode].map((p, i) => `<option value="${i}">${p[0]}</option>`).join('');
+}
+$('preset').addEventListener('change', e => {
+  const i = +e.target.value;
+  if (i < 0) return;
+  const p = PRESETS[state.mode][i];
+  if (p[1] === 'scalar') {
+    setInputType('scalar', true);
+    setFieldLatex(fields.F, p[2]);
+  } else {
+    setInputType('vec', true);
+    setFieldLatex(fields.P, p[2]);
+    setFieldLatex(fields.Q, p[3]);
+    setFieldLatex(fields.R, p[4]);
+  }
+  applyAll();
+});
+
+/* =====================================================================
+   输入历史
+===================================================================== */
+const history = [];
+function pushHistory() {
+  const ex = state.lastExprs;
+  if (!ex) return;
+  const item = {
+    type: state.inputType,
+    f: getLatexOf(fields.F), p: getLatexOf(fields.P),
+    q: getLatexOf(fields.Q), r: getLatexOf(fields.R),
+    mode: state.mode
+  };
+  item.key = JSON.stringify([item.type, item.mode, item.f, item.p, item.q, item.r]);
+  if (history.length && history[0].key === item.key) return;
+  const dup = history.findIndex(h => h.key === item.key);
+  if (dup >= 0) history.splice(dup, 1);
+  const trunc = s => s.length > 26 ? s.slice(0, 25) + '…' : s;
+  item.label = ex.type === 'scalar'
+    ? `[${item.mode}] f = ` + trunc(ex.fE)
+    : `[${item.mode}] ⟨` + trunc(ex.eP) + ', ' + trunc(ex.eQ) + (item.mode === '3d' ? ', …' : '') + '⟩';
+  history.unshift(item);
+  if (history.length > 15) history.pop();
+  renderHistory();
+}
+function renderHistory() {
+  $('history').innerHTML = '<option value="-1">— 共 ' + history.length + ' 条，选择以恢复 —</option>' +
+    history.map((h, i) => `<option value="${i}">${h.label}</option>`).join('');
+}
+$('history').addEventListener('change', e => {
+  const i = +e.target.value;
+  if (i < 0 || !history[i]) return;
+  const h = history[i];
+  if (h.mode !== state.mode) setMode(h.mode);
+  setInputType(h.type, true);
+  setFieldLatex(fields.F, h.f);
+  setFieldLatex(fields.P, h.p);
+  setFieldLatex(fields.Q, h.q);
+  setFieldLatex(fields.R, h.r);
+  applyAll();
+  e.target.value = '-1';
+});
+
+/* =====================================================================
+   控件绑定
+===================================================================== */
+function applyAll(silent) {
+  if (!compileField(silent)) return;
+  updateReadout();
+  if (state.mode === '2d') render2d(); else render3d();
+  if (!silent) pushHistory();
+}
+$('apply').addEventListener('click', () => applyAll());
+
+/* 输入类型切换 */
+function setInputType(t, skipApply) {
+  state.inputType = t;
+  document.querySelectorAll('input[name=inputType]').forEach(r => r.checked = (r.value === t));
+  const sc = t === 'scalar';
+  $('rowP').style.display = sc ? 'none' : 'flex';
+  $('rowQ').style.display = sc ? 'none' : 'flex';
+  $('rowR').style.display = (!sc && state.mode === '3d') ? 'flex' : 'none';
+  $('rowF').style.display = sc ? 'flex' : 'none';
+  if (!skipApply) applyAll(true);
+}
+document.querySelectorAll('input[name=inputType]').forEach(r =>
+  r.addEventListener('change', e => setInputType(e.target.value)));
+
+document.querySelectorAll('input[name=colorBy]').forEach(r =>
+  r.addEventListener('change', e => {
+    state.colorBy = e.target.value;
+    $('legendTitle').textContent = legendTitle();
+    state.mode === '2d' ? render2d() : render3d();
+  }));
+function legendTitle() {
+  if (state.colorBy === 'div') return '散度 ∇·F';
+  return state.mode === '2d' ? '旋度 (∇×F)·k' : '旋度模长 |∇×F|';
+}
+
+$('density').addEventListener('input', e => {
+  state.density = +e.target.value; $('oDensity').textContent = e.target.value;
+  state.mode === '2d' ? render2d() : render3d();
+});
+$('range').addEventListener('input', e => {
+  state.range = +e.target.value; $('oRange').textContent = e.target.value;
+  state.mode === '2d' ? render2d() : render3d();
+});
+$('scale').addEventListener('input', e => {
+  state.scale = +e.target.value; $('oScale').textContent = (+e.target.value).toFixed(1);
+  state.mode === '2d' ? render2d() : render3d();
+});
+['px', 'py', 'pz'].forEach(id =>
+  $(id).addEventListener('change', () =>
+    setProbe(+$('px').value || 0, +$('py').value || 0, +$('pz').value || 0, true)));
+
+/* 移动端：底部面板折叠 */
+$('panel-grip').addEventListener('click', () => {
+  const collapsed = document.body.classList.toggle('panel-collapsed');
+  $('grip-label').textContent = collapsed ? '展开面板' : '收起面板';
+  setTimeout(() => {
+    if (state.mode === '2d') { resize2d(); render2d(); }
+    else { resize3d(); if (renderer) renderer.render(scene, camera); }
+  }, 280);
+});
+
+/* 模式切换 */
+function setMode(m) {
+  state.mode = m;
+  $('btn2d').classList.toggle('active', m === '2d');
+  $('btn3d').classList.toggle('active', m === '3d');
+  const is3 = m === '3d';
+  $('pz').style.display = is3 ? 'block' : 'none';
+  $('labP').textContent = is3 ? 'P(x,y,z) =' : 'P(x,y) =';
+  $('labQ').textContent = is3 ? 'Q(x,y,z) =' : 'Q(x,y) =';
+  $('labF').textContent = is3 ? 'f(x,y,z) =' : 'f(x,y) =';
+  canvas.style.display = is3 ? 'none' : 'block';
+  container3d.style.display = is3 ? 'block' : 'none';
+  $('hint').textContent = is3 ? '单指拖 = 旋转 · 双指捏合 = 缩放 · 双击复位视角'
+                              : '轻点 = 探针 · 单指拖 = 平移 · 双指捏合 = 缩放 · 双击复位';
+  $('probeHint').textContent = is3
+    ? '输入坐标 (x, y, z) 放置探针；橙/蓝小球标记位置，紫色箭头表示该点旋度向量方向。'
+    : '轻点画布任意位置放置探针；紫色弧线表示旋转方向，橙/蓝刻线表示源/汇。';
+  $('legendTitle').textContent = legendTitle();
+  setInputType(state.inputType, true);   // 刷新各输入行的显示状态
+  fillPresets();
+  $('preset').value = '-1';
+  applyAll(true);
+  if (!is3) { resize2d(); render2d(); } else { resize3d(); render3d(); }
+}
+$('btn2d').addEventListener('click', () => setMode('2d'));
+$('btn3d').addEventListener('click', () => setMode('3d'));
+
+/* 自适应（含手机转屏） */
+function onResize() {
+  if (state.mode === '2d') { resize2d(); render2d(); }
+  else { resize3d(); if (renderer) renderer.render(scene, camera); }
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => setTimeout(onResize, 300));
+
+/* 启动 */
+resize2d();
+state.cam2d.ppu = Math.min(canvas.clientWidth, canvas.clientHeight) / (2.2 * state.range);
+fillPresets();
+compileField(true);     // MathLive 加载前先用纯文本内容编译
+setProbe(1, 1, 1);
+render2dNow();
+</script>
+</body>
+</html>
